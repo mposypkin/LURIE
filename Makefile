@@ -5,7 +5,11 @@
 # C++ compiler
 CPP = c++
 
-all: testenergy.exe
+CPPOPTS = --std=c++11
+
+all: testenergy.exe testmatmodel.exe
+
+-include deps.inc
 
 clean: 
 	rm -f *.exe *.o *.a *~ *.log deps.inc
