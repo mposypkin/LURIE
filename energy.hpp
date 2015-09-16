@@ -11,96 +11,136 @@
 #define	ENERGY_HPP
 
 #include <math.h>
+#include <functional>
 #include "matmodel.hpp"
 
 namespace lur {
 
-    class ComputeEnergy {
+    class Energy {
     public:
 
         /**
+         * Constructor
+         * @param model reference to the model
+         * @param potent reference to the potential computing function         
+         */
+        Energy(const MatModel& model, std::function <double (int, int, double) > potent) :
+        mMatModel(model), mPotent(potent) {
+        }
+
+        /**
          * Compute the energy of the material piece
-         * @param model reference to the model defining the piece
          * @param x parameters, defining the layers height, displacements and interatomic distances
          * @return the energy
          */
-        static double energy(const MatModel& model, const double* x) {
+        double energy(const double* x) {
             double E = 0;
             /* Atoms are numbered from 0 */
-            for (int i = 0; i < model.mNumLayers; i++) {
-                E += layerEnergy(i, model, x);
+            for (int i = 0;; i++) {
+                double h = mMatModel.getLayerHeight(i, x);
+                if (h > mMatModel.mHeight)
+                    break;
+                E += layerEnergy(i, x);
             }
             return E;
+
         }
-    };
 
     private:
 
-    /**
-     * Computes interaction energy for a layer
-     * @param i layer's number
-     * @param model model data
-     * @param x layer's data
-     * @return energy value
-     */
-    static double layerEnergy(int i, const MatModel& model, const double* x) {
-        double h = (i == 0) ? 0 : x[3 * i];
-        double d = x[3 * i + 1];
-        double w = x[3 * i + 2];
-        int j = 0;
-        double E = 0;
-        while (d < model.mLength) {
-            E += atomEnergy(i, j, model, x);
-            d += w;
-            j++;
-        }
-        return E;
-    }
-
-    /**
-     * Computes interaction energy for an atom (interactions with all neighbours are accounted)
-     * @param i atoms' layer
-     * @param j atoms' number in a layer
-     * @param model model data
-     * @param x layer's data
-     * @return energy value
-     */
-    static double atomEnergy(int i, int j, const MatModel& model, const double* x) {
-        double y = getLayerHeight(i);
-        int k = model.mNumLayers;
-        int ii = i % k;
-        double myx = x[3 * i + 1] + j * x[3 * i + 2];
-        double v = 0;
-        for (int l = i + 1;; l++) {            
-            h = getLayerHeight(l);
-            if (h - y > model.mRadius)
-                break;
-            int ll = l % k;
-            double d = x[3 * ll + 1];
-            double w = x[3 * ll + 2];
-            int tl = ceil((myx - R - d)/w);
-            int tu = floor((myx - R + d)/w);
-            for(int t = tl; t < tu; t ++) {
-                v + interEnergy(i, j, l, t);
+        /**
+         * Computes interaction energy for a layer
+         * @param i layer's number
+         * @param x layer's data
+         * @return energy value
+         */
+        double layerEnergy(int i, const double* x) {
+            int j = 0;
+            double E = 0;
+            while (mMatModel.getOffset(i, j, x) < mMatModel.mLength) {
+                E += atomEnergy(i, j, x);
+                j++;
             }
+            return E;
         }
-        return v;
-    }
 
-  
-    
-    /**
-     * Computes interaction energy of two atoms 
-     * @param i1 first atom layer
-     * @param j1 first atom number
-     * @param i2 second atom layer
-     * @param j2 second atom number
-     * @return interaction energy
-     */
-    static double interEnergy(int i1, int j1, int i2, int j2) {
-        /** TMP **/
-        return 1;
-    }
+        /**
+         * Computes interaction energy for an atom (interactions with all neighbours are accounted)
+         * @param i atoms' layer
+         * @param j atoms' number in a layer
+         * @param x layer's data
+         * @return energy value
+         */
+        double atomEnergy(int i, int j, const double* x) {
+            double y = mMatModel.getLayerHeight(i, x);
+            double v = 0;
+            double R = mMatModel.mRadius;
+            double myx = mMatModel.getOffset(i, j, x);
+
+            /**
+             * Computes interaction energy for two atoms
+             */
+            auto inter = [&] (int i1, int j1, int i2, int j2) {
+                double q = mMatModel.getSqrDistance(i1, j1, i2, j2, x);
+                int a1 = mMatModel.mLayersAtoms[mMatModel.getReferenceLayer(i1)];
+                int a2 = mMatModel.mLayersAtoms[mMatModel.getReferenceLayer(i2)];
+                double v = mPotent(a1, a2, q);
+                return v;
+            };
+
+            /**
+             * Computes interaction energy with the layer
+             */
+            auto lenerg = [&] (int l) {
+                double d;
+                double s;
+                mMatModel.getDisplacementAndStride(l, d, s, x);
+                int tl = ceil((myx - R - d) / s);
+                int tu = floor((myx + R - d) / s);
+                double u = 0;
+                if (i != l) {
+                    for (int t = tl; t <= tu; t++) {
+                        u += inter(i, j, l, t);
+                    }
+                } else {
+                    for (int t = tl; t <= tu; t++) {
+                        if (j != t)
+                            u += inter(i, j, l, t);
+                    }
+                }
+                return u;
+            };
+            /**
+             * Add energy of 'my' layer
+             */
+            v = lenerg(i);
+            /**
+             * Pass up              
+             */
+            for (int l = i + 1;; l++) {
+                double h = mMatModel.getLayerHeight(l, x);
+                if (h - y > R)
+                    break;
+                v += lenerg(l);
+            }
+            /**
+             * Add pass down
+             */
+            for (int l = i - 1;; l--) {
+                double h = mMatModel.getLayerHeight(l, x);
+                if (y - h > R)
+                    break;
+                v += lenerg(l);
+            }
+
+            return v;
+        }
+
+
+        std::function< double (int, int, double) > mPotent;
+        const MatModel& mMatModel;
+    };
+
 }
 
 #endif	/* ENERGY_HPP */

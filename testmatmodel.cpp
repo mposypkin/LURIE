@@ -16,12 +16,14 @@ int main(int argc, char** argv) {
     lur::MatModel mm;
     
     mm.mNumLayers = 4;
-    double x[12] = {3, 0, 0, 1, 0, 0, 3, 0, 0, 4, 0, 0};
+    double x[12] = {3, 1, 1,   1, 2, 1,   3, 1, 1,   4, 2, 1};
     
     for(int i = -10; i < 10; i ++) {
         double h = mm.getLayerHeight(i, x);
         std::cout << i << ": " << h << "\n";
     }
     
+    double d = mm.getSqrDistance(1, 4, 5, 4, x);
+    std::cout << " d = " << d << "\n";
     return 0;
 }

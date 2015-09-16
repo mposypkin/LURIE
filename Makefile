@@ -5,7 +5,11 @@
 # C++ compiler
 CPP = c++
 
+# C++ compiler options
 CPPOPTS = --std=c++11
+
+# tests
+TESTS = testenergy.exe 
 
 all: testenergy.exe testmatmodel.exe
 
@@ -17,6 +21,9 @@ clean:
 dep:
 	$(CPP) $(CPPOPTS) -MM -c *.cpp >> deps.inc;\
         true
+tests:
+	@for i in $(TESTS); do if ./$$i > /dev/null; then echo TEST PASSED; continue; else echo TEST FAILED; fi done
+
 
 .o.exe:
 	$(CPP) $(OPTS) -o $@ $< $(LIBS) $(EXTLIBS) $(LDFLAGS)
