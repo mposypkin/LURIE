@@ -5,13 +5,25 @@
 # C++ compiler
 CPP = c++
 
+# BNB solver root
+BNBROOT = ../BNB-Solver
+
+# include folders
+INCLUDE = $(BNBROOT)
+
 # C++ compiler options
-CPPOPTS = --std=c++11
+CPPOPTS = --std=c++11 -I$(INCLUDE)
+
+# Libraries to inculde 
+LIBS = $(BNBROOT)/util/common/util.a $(BNBROOT)/problems/optlib/optlib.a 
+
+# Linkers flags
+LDFLAGS = -pthread
 
 # tests
 TESTS = testenergy.exe 
 
-all: testenergy.exe testmatmodel.exe
+all: testenergy.exe testmatmodel.exe searchmbh.exe
 
 -include deps.inc
 

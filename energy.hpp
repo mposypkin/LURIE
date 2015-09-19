@@ -33,7 +33,7 @@ namespace lur {
          * @param x parameters, defining the layers height, displacements and interatomic distances
          * @return the energy
          */
-        double energy(const double* x) {
+        double energy(const double* x) const {
             double E = 0;
             /* Atoms are numbered from 0 */
             for (int i = 0;; i++) {
@@ -46,6 +46,13 @@ namespace lur {
 
         }
 
+        /**
+         * Retrieve math model
+         * @return math model reference
+         */
+        const MatModel& getModel() const {
+            return mMatModel;
+        }
     private:
 
         /**
@@ -54,7 +61,7 @@ namespace lur {
          * @param x layer's data
          * @return energy value
          */
-        double layerEnergy(int i, const double* x) {
+        double layerEnergy(int i, const double* x) const {
             int j = 0;
             double E = 0;
             while (mMatModel.getOffset(i, j, x) < mMatModel.mLength) {
@@ -71,7 +78,7 @@ namespace lur {
          * @param x layer's data
          * @return energy value
          */
-        double atomEnergy(int i, int j, const double* x) {
+        double atomEnergy(int i, int j, const double* x) const {
             double y = mMatModel.getLayerHeight(i, x);
             double v = 0;
             double R = mMatModel.mRadius;
