@@ -28,9 +28,14 @@
 
 
 /**
+ * Maximal number of MC tries
+ */
+const int ntries = 100;
+
+/**
  * Maximal local hops
  */
-const int H = 500;
+const int H = 100;
 
 
 
@@ -131,7 +136,7 @@ public:
      * @param n current step number 
      */
     bool stopnow(double xdiff, double fdiff, double gmin, double fval, int n) {
-        //        std::cout << "n = " << n << "f = " << fval << ", gmin = " << gmin << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
+//        std::cout << "n = " << n << "f = " << fval << ", gmin = " << gmin << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
         if (n > 100) {
             return true;
         } else
@@ -161,6 +166,7 @@ int main(int argc, char** argv) {
     std::string jsons;
     FileUtils::getStringFromFile(argv[1], jsons);
     lur::ParseJson::parseModelData(jsons, mm);
+    double y[mm.mNumLayers * 3];
     double ev;
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
 
@@ -182,7 +188,6 @@ int main(int argc, char** argv) {
     lur::fillCarbonParametersTersoffOriginal(tparam);
     lur::TersoffUtils tutils(tparam);
     lur::TersoffEnergy enrg(mm, tutils);
-    enrg.setFixedAtoms(true);
 #endif    
 
     const int N = mm.mNumLayers * 3;
@@ -229,7 +234,24 @@ int main(int argc, char** argv) {
 
     signal(SIGINT, output);
 
-    bv = mbhbc.search(x);
+    bv = 0;
+    for (int i = 0; i < ntries; i++) {
+        double v;
+        rfill.getPoint(y);
+        v = obj.func(y);
+        std::cout << "Iteration " << i;
+        std::cout << " starting from v = " << v << "\n";
+        v = mbhbc.search(y);
+        std::cout << "MBH found " << v << "\n";
+        if (v < bv) {
+            std::cout << "Record update: v = " << v << ",\n";
+            VecUtils::vecPrint(N, y);
+            bv = v;
+            VecUtils::vecCopy(N, y, x);
+        }
+    }
+
+
 
     std::cout << "Found v = " << bv << "\n";
     VecUtils::vecPrint(N, x);
@@ -245,4 +267,5 @@ int main(int argc, char** argv) {
     std::cout << json << "\n";
     return 0;
 }
+
 

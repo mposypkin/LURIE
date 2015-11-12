@@ -1,5 +1,5 @@
 /**
- * Search for minimal energy with monotonic basin hopping methods
+ * Search for minimal energy with gradient descent
  */
 
 /* 
@@ -8,16 +8,13 @@
  *
  * Created on September 18, 2015, 8:44 AM
  */
+
 #include <signal.h>
 #include <problems/optlib/gradboxdesc.hpp>
 #include <problems/optlib/bbboxdesc.hpp>
 #include <problems/optlib/numgradobjective.hpp>
-#include <problems/nlp/mbh/mbhboxcon.hpp>
-#include <problems/nlp/mbh/staticpert.hpp>
-#include <problems/nlp/mbh/adaptpert.hpp>
 #include <util/box/boxutils.hpp>
 #include <util/common/fileutils.hpp>
-#include <util/spacefill/rndfill.hpp>
 #include "lurobj.hpp"
 #include "parsejson.hpp"
 #include "genjson.hpp"
@@ -30,39 +27,12 @@
 /**
  * Maximal local hops
  */
-const int H = 500;
-
-
+const int H = 10000;
 
 /**
  * Vicinity size
  */
 const double V = .5;
-
-/*
-void initbox(Box<double>& box) {
-    int n = box.mDim;
-    for (int i = 0; i < n; i++) {
-        if (i % 3 == 0) {
-            box.mA[i] = 0;
-            box.mB[i] = 3;
-        } else if (i % 3 == 1) {
-            box.mA[i] = 0;
-            box.mB[i] = 3;
-        } else {
-            box.mA[i] = 0.1;
-            box.mB[i] = 3;
-        }
-    }
-}
- */
-
-void initVicinity(int N, Box<double>& box) {
-    for (int i = 0; i < N; i++) {
-        box.mA[i] = -V;
-        box.mB[i] = V;
-    }
-}
 
 double sqrpotent(int a1, int a2, double q) {
     return (q - 1)*(q - 1) - 1;
@@ -75,15 +45,6 @@ double ljpotent(int a1, int a2, double q) {
     double u = q * q * q;
     double v = u * u;
     double p = 1. / v - 2. / u;
-    return p;
-}
-
-double morsepotent(int a1, int a2, double q) {
-    BNB_ASSERT(q >= 0);
-    double r = sqrt(q);
-    const double rho = 10;
-    double E = exp(rho * (1 - r));
-    double p = E * (E - 2);
     return p;
 }
 
@@ -103,16 +64,23 @@ double ljcutpotent(int a1, int a2, double q) {
     return p;
 }
 
+double morsepotent(int a1, int a2, double q) {
+    BNB_ASSERT(q >= 0);
+    double r = sqrt(q);
+    const double rho = 10;
+    double E = exp(rho * (1 - r));
+    double p = E * (E - 2);
+    return p;
+}
+
 class GbdStopper : public GradBoxDescent<double>::Stopper {
 public:
 
     bool stopnow(double xdiff, double fdiff, double gnorm, double fval, int n) {
-        //std::cout << "n = " << n << "f = " << fval << ", gnorm = " << gnorm << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
-        if (gnorm < 0.1) {
+        std::cout << "n = " << n << "f = " << fval << ", gnorm = " << gnorm << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
+        if (gnorm < 0.01) {
             return true;
-        } else if (xdiff < 0.01) {
-            return true;
-        } else if (n > 16) {
+        } else if (n > 1000) {
             return true;
         } else
             return false;
@@ -131,19 +99,21 @@ public:
      * @param n current step number 
      */
     bool stopnow(double xdiff, double fdiff, double gmin, double fval, int n) {
-        //        std::cout << "n = " << n << "f = " << fval << ", gmin = " << gmin << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
-        if (n > 100) {
+        std::cout << "n = " << n << "f = " << fval << ", gmin = " << gmin << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
+        if (n > 1000) {
             return true;
         } else
             return false;
     }
 };
 
+/*
+ * Testing the perturbers
+ */
+
 double x[100];
-
-lur::MatModel mm;
-
 double bv;
+lur::MatModel mm;
 
 void output(int sig) {
     std::cout << "Found v = " << bv << "\n";
@@ -151,15 +121,13 @@ void output(int sig) {
     exit(-1);
 }
 
-/*
- * Testing the perturbers
- */
 int main(int argc, char** argv) {
 
     if (argc != 2)
-        BNB_ERROR_REPORT("Usage: searchmbh.exe json_file\n");
+        BNB_ERROR_REPORT("Usage: searchgdsc.exe json_file\n");
     std::string jsons;
     FileUtils::getStringFromFile(argv[1], jsons);
+
     lur::ParseJson::parseModelData(jsons, mm);
     double ev;
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
@@ -168,8 +136,8 @@ int main(int argc, char** argv) {
     // Lennard Jones
     lur::PairPotentialEnergy enrg(mm, ljpotent);
 #endif
-#if 0
-    // Lennard Jones
+#if 0    
+    // Cutted Lennard Jones
     lur::PairPotentialEnergy enrg(mm, ljcutpotent);
 #endif
 #if 0    
@@ -188,48 +156,33 @@ int main(int argc, char** argv) {
     const int N = mm.mNumLayers * 3;
     lur::LurieObj obj(enrg, mm);
     NumGradObjective<double> nobj(obj);
-    nobj.setH(1E-8);
-
+    nobj.setH(1E-4);
     Box<double> box(N);
     lur::ParseJson::parseBoxData(jsons, box);
-    NlpProblem<double> prob;
-    prob.mBox = box;
-    prob.mObj = &obj;
-    Box<double> vicinity(N);
-    initVicinity(N, vicinity);
+    std::cout << "Searching in box " << BoxUtils::toString(box) << "\n";
 
 #if 0    
     GbdStopper stp;
     GradBoxDescent<double> locs(box, &stp);
     locs.getOptions().mGInit = .01;
-#endif    
+#endif
 #if 1   
     BBStopper stp;
     BBBoxDescent<double> locs(box, &stp);
     locs.getOptions().mHInit = 4;
     locs.getOptions().mDec = 0.5;
-    locs.getOptions().mHLB = 1e-6;
-    locs.getOptions().mInc = 1.75;
+    locs.getOptions().mHLB = 1e-6;    
+    locs.getOptions().mInc =  1.75;
 #endif
 
-    locs.setObjective(&nobj);
-    RndFill<double> rfill(box);
-
-
-#if 0    
-    StaticPerturber<double> perturber(prob, vicinity);
-#else
-    AdaptPerturber<double> perturber(prob, vicinity, AdaptPerturber<double>::Params({1, .01, 2, 0.1, 1.1}));
-#endif    
-#if 0
-    MBHBoxCon<double> mbhbc(prob, perturber, H);
-#else    
-    MBHBoxCon<double> mbhbc(prob, perturber, H, &locs);
-#endif
 
     signal(SIGINT, output);
 
-    bv = mbhbc.search(x);
+
+    locs.setObjective(&nobj);
+    locs.search(x, &bv);
+
+
 
     std::cout << "Found v = " << bv << "\n";
     VecUtils::vecPrint(N, x);
@@ -243,6 +196,8 @@ int main(int argc, char** argv) {
     lur::GenJSON::genLattice(mm, bv, x, json);
     json += "\n}\n";
     std::cout << json << "\n";
+
     return 0;
 }
+
 

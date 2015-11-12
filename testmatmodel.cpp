@@ -6,6 +6,7 @@
  */
 
 #include <iostream>
+#include <util/common/bnberrcheck.hpp>
 #include "matmodel.hpp"
 
 /*
@@ -16,7 +17,7 @@ int main(int argc, char** argv) {
     lur::MatModel mm;
     
     mm.mNumLayers = 4;
-    double x[12] = {3, 1, 1,   1, 2, 1,   3, 1, 1,   4, 2, 1};
+    double x[12] = {3, 1, 1,   1, 2, 1,   2, 1, 1,   1, 2, 1};
     
     for(int i = -10; i < 10; i ++) {
         double h = mm.getLayerHeight(i, x);
@@ -25,5 +26,6 @@ int main(int argc, char** argv) {
     
     double d = mm.getSqrDistance(1, 4, 5, 4, x);
     std::cout << " d = " << d << "\n";
+    BNB_ASSERT(d == 49);
     return 0;
 }

@@ -12,6 +12,7 @@
 
 #include <problems/optlib/objective.hpp>
 #include "energy.hpp"
+#include "matmodel.hpp"
 
 namespace lur {
 
@@ -23,8 +24,8 @@ namespace lur {
          * @param mm material model
          * @param potent potential
          */
-        LurieObj(const lur::Energy& energy) : mEnergy(energy) {
-            int n = energy.getModel().mNumLayers * 3;
+        LurieObj(lur::Energy& energy, const MatModel& model) : mEnergy(energy) {
+            int n = model.mNumLayers * 3;
             Objective<double>::setDim(n);
         }
 
@@ -41,7 +42,8 @@ namespace lur {
        
     private:
         
-        const lur::Energy& mEnergy;
+        lur::Energy& mEnergy;
+                
     };
 
 }
