@@ -144,7 +144,7 @@ namespace lur {
                 int tu = floor((myx + mRadius - d) / s);
                 double u = 0;
                 for (int t = tl; t <= tu; t++) {
-                      compf(l, t);
+                    compf(l, t);
                 }
                 return u;
             };
@@ -173,6 +173,31 @@ namespace lur {
                 lenerg(l);
             }
         };
+
+        /**
+         * Computes bounds of atom indeces based on the rectangle shape
+         * @param x lattice parameters
+         * @param lbounds lower indices
+         * @param rbounds upper indices
+         */
+        void computeBounds(const double* x, std::vector<int> &lbounds, std::vector<int> &rbounds) const {
+            for (int i = 0; i < mNumLayers; i++) {
+                int a = 0, b = -1;
+                int j = -1;
+                while (getOffset(i, j, x) >= 0) {
+                    a = j;
+                    j--;
+                }
+                j = 0;
+                while (getOffset(i, j, x) <= mLength) {
+                    b = j;
+                    j++;
+                }
+                lbounds[i] = a;
+                rbounds[i] = b;
+            }
+        }
+
 
         /**
          * Number of main layers

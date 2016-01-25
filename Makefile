@@ -15,7 +15,7 @@ INCLUDE = $(BNBROOT)
 CPPOPTS = --std=c++11 -I$(INCLUDE)
 
 # Libraries to inculde 
-LIBS = $(BNBROOT)/util/common/util.a $(BNBROOT)/problems/optlib/optlib.a $(BNBROOT)/libjson/libjson.a lurdebug.o
+LIBS = $(BNBROOT)/util/common/util.a $(BNBROOT)/problems/optlib/optlib.a $(BNBROOT)/libjson/libjson.a 
 
 # Linkers flags
 LDFLAGS = -pthread 
@@ -23,7 +23,7 @@ LDFLAGS = -pthread
 # tests
 TESTS = testenergy.exe 
 
-all: testenergy.exe testmatmodel.exe searchmbh.exe searchgdsc.exe locmincheck.exe genpoints.exe searchall.exe searchmcmbh.exe
+all: testenergy.exe testmatmodel.exe searchmbh.exe searchgdsc.exe locmincheck.exe genpoints.exe searchmcmbh.exe montecarlo.exe searchall.exe
 
 -include deps.inc
 

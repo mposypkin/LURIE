@@ -18,6 +18,7 @@
 #include <problems/boxcon/boxconbnb/boxconbnb.hpp>
 #include <problems/boxcon/boxconbnb/lipbounder.hpp>
 #include <util/box/boxutils.hpp>
+#include <problems/optlib/bbboxdesc.hpp>
 #include <util/common/fileutils.hpp>
 #include "lurobj.hpp"
 #include "parsejson.hpp"
@@ -26,76 +27,22 @@
 #include "tersoffparams.hpp"
 #include "carbontersoff.hpp"
 #include "tsofenergy.hpp"
+#include "pairpotentials.hpp"
 
-
-/**
- * Maximal local hops
- */
-const int H = 1000;
-
-/**
- * Vicinity size
- */
-const double V = .5;
-
-/*
-void initbox(Box<double>& box) {
-    int n = box.mDim;
-    for (int i = 0; i < n; i++) {
-        if (i % 3 == 0) {
-            box.mA[i] = 0;
-            box.mB[i] = 3;
-        } else if (i % 3 == 1) {
-            box.mA[i] = 0;
-            box.mB[i] = 3;
-        } else {
-            box.mA[i] = 0.1;
-            box.mB[i] = 3;
-        }
-    }
-}
- */
-
-void initVicinity(int N, Box<double>& box) {
-    for (int i = 0; i < N; i++) {
-        box.mA[i] = -V;
-        box.mB[i] = V;
-    }
-}
-
-double sqrpotent(int a1, int a2, double q) {
-    return (q - 1)*(q - 1) - 1;
-}
-
-double ljpotent(int a1, int a2, double q) {
-    BNB_ASSERT(q >= 0);
-    if (q == 0)
-        q = 0.00001;
-    double u = q * q * q;
-    double v = u * u;
-    double p = 1. / v - 2. / u;
-    return p;
-}
-
-double morsepotent(int a1, int a2, double q) {
-    BNB_ASSERT(q >= 0);
-    double r = sqrt(q);
-    const double rho = 10;
-    double E = exp(rho * (1 - r));
-    double p = E * (E - 2);
-    return p;
-}
-
-class MyStopper : public GradBoxDescent<double>::Stopper {
+class BBStopper : public BBBoxDescent<double>::Stopper {
 public:
 
-    bool stopnow(double xdiff, double fdiff, double gnorm, double fval, int n) {
-        std::cout << "n = " << n << "f = " << fval << ", gnorm = " << gnorm << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
-        if (gnorm < 0.0001) {
-            return true;
-        } else if (xdiff < 0.000000001) {
-            return true;
-        } else if (n > 1000) {
+    /**
+     * Returns true when the search should stop
+     * @param xdiff difference between old and new x
+     * @param fdiff difference between old and new f value
+     * @param gmin gradient minimal component
+     * @param fval function value
+     * @param n current step number 
+     */
+    bool stopnow(double xdiff, double fdiff, double gmin, double fval, int n) {
+        //std::cout << "n = " << n << " gmin = " << gmin << "\n";
+        if (n > 1000) {
             return true;
         } else
             return false;
@@ -107,8 +54,8 @@ public:
  */
 int main(int argc, char** argv) {
 
-    if (argc != 2)
-        BNB_ERROR_REPORT("Usage: searchall.exe json_file\n");
+    if (argc != 4)
+        BNB_ERROR_REPORT("Usage: searchall.exe json_file log_for_incumbents log_for_allvalues\n");
     std::string jsons;
     FileUtils::getStringFromFile(argv[1], jsons);
     lur::MatModel mm;
@@ -136,71 +83,70 @@ int main(int argc, char** argv) {
 
     const int N = mm.mNumLayers * 3;
     lur::LurieObj obj(enrg, mm);
-    NumGradObjective<double> nobj(obj);
-    nobj.setH(1E-8);
 
     Box<double> box(N);
     lur::ParseJson::parseBoxData(jsons, box);
-    NlpProblem<double> prob;
-    prob.mBox = box;
-    prob.mObj = &obj;
-    Box<double> vicinity(N);
-    initVicinity(N, vicinity);
 
-    MyStopper stp;
-    GradBoxDescent<double> gbd(box, &stp);
-    gbd.getOptions().mGInit = .01;
-    gbd.setObjective(&nobj);
+    BBStopper stp;
+    BBBoxDescent<double> locs(box, &stp);
+    locs.getOptions().mHInit = 4;
+    locs.getOptions().mDec = 0.5;
+    locs.getOptions().mHLB = 1e-6;
+    locs.getOptions().mInc = 1.75;
+    locs.setObjective(&obj);
 
-#if 0    
-    StaticPerturber<double> perturber(prob, vicinity);
-#else
-    AdaptPerturber<double> perturber(prob, vicinity, AdaptPerturber<double>::Params({1, .01, 2, 0.1, 1.1}));
-#endif    
-#if 1
-    MBHBoxCon<double> mbhbc(prob, perturber, H);
-#else    
-    MBHBoxCon<double> mbhbc(prob, perturber, H, &gbd);
-#endif
 
     BoxconProblem<double> bp;
     bp.mBox = box;
-    bp.mObj = &nobj;
+    bp.mObj = &obj;
     LipBounder<double> lb(bp.mObj);
-    lb.setLipConst(64);
+    lb.setLipConst(96);
     BoxconBNB<double> bnb;
     bnb.addBounder(&lb);
     bnb.init(bp);
 
     double bestv = 0;
     int cnt = 0;
+    time_t tstart = time(NULL);
     auto hndl = [&](BoxconBNB<double>::Solution& incum, BoxconBNB<double>::Sub & sub) {
         BoxUtils::getCenter(sub.mBox, y);
         double u = obj.func(y);
         //std::cout << "u = " << u << "\n";        
-        if ((u < 0.9 * incum.mValue) && ((cnt++ % 100) == 0)) {
-            //std::cout << "Search from " << u << "\n";
+        // if ((u < 0.9 * incum.mValue) && ((cnt++ % 100) == 0)) {
+        //if ((cnt++ % 100) == 0) {
+        if (true) {
+            std::cout << "Search from " << u << "\n";
+            std::cout << "In box " << BoxUtils::toString(sub.mBox) << "\n";
+            std::cout << " with radius " << BoxUtils::radius(sub.mBox) << "\n";
+
             double v;
-#if 0
-            gbd.search(y, &v);
-#endif            
-#if 1
-            v = mbhbc.search(y);
-#endif            
-            //std::cout << "Found v = " << v << "\n";
+            locs.search(y, &v);
+
+            auto logval = [&] (const char* fname, double v) {
+                time_t tcur = time(NULL) - tstart;
+                std::ostringstream os;
+                os << tcur << " " << v << "\n";
+                FileUtils::updateFileWithContent(fname, os.str().c_str());
+            };
+            
+            std::cout << "Found v = " << v << "\n";
+            logval(argv[3], v);
+            
             if (v < bestv) {
                 bestv = v;
                 std::cout << "Improved incumbent " << bestv << " from " << u << "\n";
+                incum.mValue = v;
                 VecUtils::vecPrint(N, y);
                 VecUtils::vecCopy(N, y, x);
+                logval(argv[2], v);
             }
         }
     };
 
-    //bnb.setHandler(hndl);
+    bnb.setHandler(hndl);
     long long steps = 100000;
     bnb.solve(steps);
-#if 1
+#if 0
     std::cout << "The solution is " << bnb.getIncumbent().mValue << " found in " << steps << " steps \n";
     VecUtils::vecPrint(N, (double*) bnb.getIncumbent().mX);
     VecUtils::vecCopy(N, (double*) bnb.getIncumbent().mX, x);
@@ -212,16 +158,14 @@ int main(int argc, char** argv) {
     std::cout << "Searching in box " << BoxUtils::toString(box) << "\n";
     double v = mbhbc.search(x);
 #endif
-    
-#if 1
+
     //enrg.setFixedAtoms(true);
     double v;
-    gbd.search(x, &v);
-#endif    
-    
+    locs.search(x, &v);
+
+
     std::cout << "Found v = " << v << "\n";
     VecUtils::vecPrint(N, x);
-
     std::string json;
     json += "{\n";
     lur::GenJSON::genModel(mm, json);

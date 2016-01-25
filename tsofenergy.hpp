@@ -68,23 +68,7 @@ namespace lur {
 
     private:
 
-        void recomputeBounds(const double* x) {
-            for (int i = 0; i < mMatModel.mNumLayers; i++) {
-                int a = 0, b = -1;
-                int j = -1;
-                while (mMatModel.getOffset(i, j, x) >= 0) {
-                    a = j;
-                    j--;
-                }
-                j = 0;
-                while (mMatModel.getOffset(i, j, x) <= mMatModel.mLength) {
-                    b = j;
-                    j++;
-                }
-                mLBounds[i] = a;
-                mUBounds[i] = b;
-            }
-        }
+ 
 
         /**
          * Computes interaction energy for a layer
@@ -95,10 +79,10 @@ namespace lur {
         double layerEnergy(int i, const double* x)  {
             double E = 0;
             if (!mFixedAtoms)
-                recomputeBounds(x);
+                mMatModel.computeBounds(x, mLBounds, mUBounds);
             else if(!mOnceComputed) {
                 mOnceComputed = true;
-                recomputeBounds(x);
+                mMatModel.computeBounds(x, mLBounds, mUBounds);
             }
             for (int j = mLBounds[i]; j <= mUBounds[i]; j++) {
                 E += atomEnergy(i, j, x);

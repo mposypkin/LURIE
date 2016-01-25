@@ -10,11 +10,17 @@
  */
 
 #include <signal.h>
+#include <limits>
+#include <sstream>
 #include <problems/optlib/gradboxdesc.hpp>
 #include <problems/optlib/bbboxdesc.hpp>
 #include <problems/optlib/numgradobjective.hpp>
 #include <util/box/boxutils.hpp>
 #include <util/common/fileutils.hpp>
+#include <util/spacefill/rndfill.hpp>
+#include <problems/nlp/mbh/mbhboxcon.hpp>
+#include <problems/nlp/mbh/staticpert.hpp>
+#include <problems/nlp/mbh/adaptpert.hpp>
 #include "lurobj.hpp"
 #include "parsejson.hpp"
 #include "genjson.hpp"
@@ -24,12 +30,22 @@
 #include "tsofenergy.hpp"
 #include "pairpotentials.hpp"
 
-
+/**
+ * Maximal local hops for basin Hopping
+ */
+const int H = 8;
 
 /**
  * Vicinity size
  */
-const double V = .5;
+const double V = 2.0;
+
+void initVicinity(int N, Box<double>& box) {
+    for (int i = 0; i < N; i++) {
+        box.mA[i] = -V;
+        box.mB[i] = V;
+    }
+}
 
 class GbdStopper : public GradBoxDescent<double>::Stopper {
 public:
@@ -58,6 +74,9 @@ public:
         }
         std::cout << "n = " << n << "f = " << fval << ", gnorm = " << gnorm << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
 
+        VecUtils::vecPrint(mBox.mDim, x);
+        VecUtils::vecPrint(mBox.mDim, grad);
+
         if (gnorm < 0.01) {
             return true;
         } else if (n > 100000) {
@@ -82,19 +101,15 @@ public:
      * @param n current step number 
      */
     bool stopnow(double xdiff, double fdiff, double gmin, double fval, int n) {
-        std::cout << "n = " << n << " gmin = " << gmin << ", fval = " << fval << "\n";
+        //std::cout << "n = " << n << " gmin = " << gmin << "\n";
         //if(gmin > -1e-6)
-            //return true;
-        if (n > 10000) {
+         //   return true;
+        if (n > 1000) {
             return true;
         } else
             return false;
     }
 };
-
-/*
- * Testing the perturbers
- */
 
 double x[100];
 double bv;
@@ -108,14 +123,14 @@ void output(int sig) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 2)
-        BNB_ERROR_REPORT("Usage: searchgdsc.exe json_file\n");
+    if (argc != 5)
+        BNB_ERROR_REPORT("Usage: searchgdsc.exe json_file monte_carlo_tries log_for_incumbents log_for_values\n");
     std::string jsons;
     FileUtils::getStringFromFile(argv[1], jsons);
-
     lur::ParseJson::parseModelData(jsons, mm);
     double ev;
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
+    int ntries = atoi(argv[2]);
 
 #if 0    
     // Lennard Jones
@@ -145,25 +160,21 @@ int main(int argc, char** argv) {
     //enrg.setFixedAtoms(true);
 #endif    
 
-#if 1    
+#if 0    
     // Sets the fixed atoms attribute
-    // enrg.setFixedAtoms(true);
+    enrg.setFixedAtoms(true);
 #endif    
 
     const int N = mm.mNumLayers * 3;
     lur::LurieObj obj(enrg, mm);
-    NumGradObjective<double> nobj(obj);
-    nobj.setH(1E-4);
+
     Box<double> box(N);
     lur::ParseJson::parseBoxData(jsons, box);
+    NlpProblem<double> prob;
+    prob.mBox = box;
+    prob.mObj = &obj;
     std::cout << "Searching in box " << BoxUtils::toString(box) << "\n";
 
-#if 0    
-    GbdStopper stp(box);
-    GradBoxDescent<double> locs(box, &stp);
-    locs.getOptions().mGInit = .1;
-#endif
-#if 1   
     BBStopper stp;
     BBBoxDescent<double> locs(box, &stp);
     locs.getOptions().mHInit = 4;
@@ -171,28 +182,64 @@ int main(int argc, char** argv) {
     locs.getOptions().mHLB = 1e-6;
     locs.getOptions().mInc = 1.75;
     //locs.getOptions().mOnlyCoordinateDescent = true;
+    locs.setObjective(&obj);
+
+
+
+    RndFill<double> rfill(box);
+
+    Box<double> vicinity(N);
+    initVicinity(N, vicinity);
+#if 0    
+    StaticPerturber<double> perturber(prob, vicinity);
+#else
+    AdaptPerturber<double> perturber(prob, vicinity, AdaptPerturber<double>::Params({1, .01, 2, 0.1, 1.1}));
+#endif    
+#if 0
+    MBHBoxCon<double> mbhbc(prob, perturber, H);
+#else    
+    MBHBoxCon<double> mbhbc(prob, perturber, H, &locs);
 #endif
 
-    // TMP DEBUG
-#if 0    
-    double xxx[12] = {0.866173, 0.982091, 0.982755, 0.950314, 2.08087, 1.84751, 0.4, 2.99746, 1.86217, 0.865676, 1.49372, 0.974428};
-    std::cout << nobj.func(xxx) << "\n";
-    double ggg[12];
-    nobj.grad(xxx, ggg);
-    VecUtils::vecPrint(12, ggg);
-    exit(0);
-#endif    
-    // TMP
+    double y[N];
+    double cv = std::numeric_limits<double>::max();
+    ;
+    int cnt = 0;
 
+    time_t tstart = time(NULL);
+
+    auto process = [&] () {
+        auto logval = [&] (const char* fname, double v) {
+            time_t tcur = time(NULL) - tstart;
+            std::ostringstream os;
+            os << tcur << " " << v << "\n";
+            FileUtils::updateFileWithContent(fname, os.str().c_str());
+        };
+        cnt++;
+        logval(argv[4], cv);
+        std::cout << "Monte Carlo Iteration = " << cnt << "\n";
+        if (cv < bv) {
+            logval(argv[3], cv);
+            std::cout << "Improved v = " << cv << "\n";
+            VecUtils::vecPrint(N, y);
+            bv = cv;
+            VecUtils::vecCopy(N, y, x);
+        }
+    };
 
     signal(SIGINT, output);
 
-    VecUtils::vecPrint(N, x);
-    locs.setObjective(&nobj);
-    locs.search(x, &bv);
 
-    std::cout << "Found v = " << bv << "\n";
-    VecUtils::vecPrint(N, x);
+    for (int i = 0; i < ntries; i++) {
+        rfill.getPoint(y);
+#if 1        
+        locs.search(y, &cv);
+#endif
+#if 0
+        cv = mbhbc.search(y);
+#endif        
+        process();
+    }
 
     std::string json;
     json += "{\n";
@@ -206,5 +253,6 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
 
 

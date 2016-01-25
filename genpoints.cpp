@@ -1,5 +1,5 @@
 /**
- * Search for minimal energy with monotonic basin hopping methods
+ * Generates points in a rectangular region
  */
 
 /* 
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         //std::cout << json << "\n";
         std::ostringstream os;
         os << I;        
-        FileUtils::createFileWithContent(os.str().c_str(), json.c_str());
+        FileUtils::updateFileWithContent(os.str().c_str(), json.c_str());
     };
     for (int i = 0; i < ntries; i++) {
         rfill.getPoint(x);

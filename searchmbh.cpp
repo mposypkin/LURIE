@@ -25,37 +25,19 @@
 #include "tersoffparams.hpp"
 #include "carbontersoff.hpp"
 #include "tsofenergy.hpp"
+#include "pairpotentials.hpp"
 
 
 /**
- * Maximal local hops
+ * Maximal local hops for basin Hopping
  */
-const int H = 500;
-
+const int H = 8;
 
 
 /**
  * Vicinity size
  */
-const double V = .5;
-
-/*
-void initbox(Box<double>& box) {
-    int n = box.mDim;
-    for (int i = 0; i < n; i++) {
-        if (i % 3 == 0) {
-            box.mA[i] = 0;
-            box.mB[i] = 3;
-        } else if (i % 3 == 1) {
-            box.mA[i] = 0;
-            box.mB[i] = 3;
-        } else {
-            box.mA[i] = 0.1;
-            box.mB[i] = 3;
-        }
-    }
-}
- */
+const double V = 2.0;
 
 void initVicinity(int N, Box<double>& box) {
     for (int i = 0; i < N; i++) {
@@ -63,61 +45,6 @@ void initVicinity(int N, Box<double>& box) {
         box.mB[i] = V;
     }
 }
-
-double sqrpotent(int a1, int a2, double q) {
-    return (q - 1)*(q - 1) - 1;
-}
-
-double ljpotent(int a1, int a2, double q) {
-    BNB_ASSERT(q >= 0);
-    if (q == 0)
-        q = 0.00001;
-    double u = q * q * q;
-    double v = u * u;
-    double p = 1. / v - 2. / u;
-    return p;
-}
-
-double morsepotent(int a1, int a2, double q) {
-    BNB_ASSERT(q >= 0);
-    double r = sqrt(q);
-    const double rho = 10;
-    double E = exp(rho * (1 - r));
-    double p = E * (E - 2);
-    return p;
-}
-
-double ljcutpotent(int a1, int a2, double q) {
-    BNB_ASSERT(q >= 0);
-    double p;
-    if (q > 9) {
-        p = 0;
-    } else {
-        if (q == 0)
-            q = 0.00001;
-        double u = q * q * q;
-        double v = u * u;
-        p = 1. / v - 2. / u;
-        p -= ljpotent(a1, a2, 9);
-    }
-    return p;
-}
-
-class GbdStopper : public GradBoxDescent<double>::Stopper {
-public:
-
-    bool stopnow(double xdiff, double fdiff, double gnorm, double fval, int n) {
-        //std::cout << "n = " << n << "f = " << fval << ", gnorm = " << gnorm << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
-        if (gnorm < 0.1) {
-            return true;
-        } else if (xdiff < 0.01) {
-            return true;
-        } else if (n > 16) {
-            return true;
-        } else
-            return false;
-    }
-};
 
 class BBStopper : public BBBoxDescent<double>::Stopper {
 public:
@@ -132,7 +59,7 @@ public:
      */
     bool stopnow(double xdiff, double fdiff, double gmin, double fval, int n) {
         //        std::cout << "n = " << n << "f = " << fval << ", gmin = " << gmin << ", xdiff = " << xdiff << ", fdiff = " << fdiff << "\n";
-        if (n > 100) {
+        if (n > 1000) {
             return true;
         } else
             return false;
@@ -164,13 +91,9 @@ int main(int argc, char** argv) {
     double ev;
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
 
-#if 0    
-    // Lennard Jones
-    lur::PairPotentialEnergy enrg(mm, ljpotent);
-#endif
 #if 0
-    // Lennard Jones
-    lur::PairPotentialEnergy enrg(mm, ljcutpotent);
+    lur::PotentialCutter pc(6, 0.5, lur::ljpotent);
+    lur::PairPotentialEnergy enrg(mm, pc);
 #endif
 #if 0    
     // Morse
@@ -182,7 +105,7 @@ int main(int argc, char** argv) {
     lur::fillCarbonParametersTersoffOriginal(tparam);
     lur::TersoffUtils tutils(tparam);
     lur::TersoffEnergy enrg(mm, tutils);
-    enrg.setFixedAtoms(true);
+    //enrg.setFixedAtoms(true);
 #endif    
 
     const int N = mm.mNumLayers * 3;
@@ -195,27 +118,18 @@ int main(int argc, char** argv) {
     NlpProblem<double> prob;
     prob.mBox = box;
     prob.mObj = &obj;
-    Box<double> vicinity(N);
-    initVicinity(N, vicinity);
 
-#if 0    
-    GbdStopper stp;
-    GradBoxDescent<double> locs(box, &stp);
-    locs.getOptions().mGInit = .01;
-#endif    
-#if 1   
     BBStopper stp;
     BBBoxDescent<double> locs(box, &stp);
     locs.getOptions().mHInit = 4;
     locs.getOptions().mDec = 0.5;
     locs.getOptions().mHLB = 1e-6;
     locs.getOptions().mInc = 1.75;
-#endif
-
     locs.setObjective(&nobj);
     RndFill<double> rfill(box);
 
-
+    Box<double> vicinity(N);
+    initVicinity(N, vicinity);
 #if 0    
     StaticPerturber<double> perturber(prob, vicinity);
 #else

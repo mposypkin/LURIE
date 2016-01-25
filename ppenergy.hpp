@@ -27,7 +27,9 @@ namespace lur {
          * @param potent reference to the potential computing function         
          */
         PairPotentialEnergy(const MatModel& model, std::function <double (int, int, double) > potent) :
-        mMatModel(model), mPotent(potent) {
+        mMatModel(model), mPotent(potent), mFixedAtoms(false), mOnceComputed(false) {
+            mLBounds.resize(model.mNumLayers);
+            mUBounds.resize(model.mNumLayers);
         }
 
         /**
@@ -66,6 +68,16 @@ namespace lur {
         const MatModel& getModel() const {
             return mMatModel;
         }
+
+        /**
+         * Sets fixed atoms regime on or off. Fixed atoms means that the energy is computed for a set of atoms rather than a piece of material
+         * @param onoff on - true, off - false
+         */
+        void setFixedAtoms(bool onoff) {
+            mFixedAtoms = onoff;
+            mOnceComputed = false;
+        }
+
     private:
 
         /**
@@ -74,17 +86,17 @@ namespace lur {
          * @param x layer's data
          * @return energy value
          */
-        double layerEnergy(int i, const double* x) const {
-            int j = -1;
+
+        double layerEnergy(int i, const double* x) {
             double E = 0;
-            while (mMatModel.getOffset(i, j, x) >= 0) {
-                E += atomEnergy(i, j, x);
-                j--;
+            if (!mFixedAtoms)
+                mMatModel.computeBounds(x, mLBounds, mUBounds);
+            else if (!mOnceComputed) {
+                mOnceComputed = true;
+                mMatModel.computeBounds(x, mLBounds, mUBounds);
             }
-            j = 0;
-            while (mMatModel.getOffset(i, j, x) <= mMatModel.mLength) {
+            for (int j = mLBounds[i]; j <= mUBounds[i]; j++) {
                 E += atomEnergy(i, j, x);
-                j++;
             }
             return E;
         }
@@ -120,6 +132,11 @@ namespace lur {
 
         std::function< double (int, int, double) > mPotent;
         const MatModel& mMatModel;
+        bool mFixedAtoms;
+        bool mOnceComputed;
+        std::vector< int > mLBounds;
+        std::vector< int > mUBounds;
+
     };
 
 }
