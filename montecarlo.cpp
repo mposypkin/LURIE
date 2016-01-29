@@ -146,12 +146,12 @@ int main(int argc, char** argv) {
     lur::PairPotentialEnergy enrg(mm, lur::morsepotent);
 #endif
 
-#if 0
-    lur::PotentialCutter pc(6, 0.5, lur::ljpotent);
+#if 1
+    lur::PotentialCutter pc(3 * 3, 3 * 3 - 2.8 * 2.8, lur::ljpotent);
     lur::PairPotentialEnergy enrg(mm, pc);
 #endif
 
-#if 1
+#if 0
     // Tersoff
     lur::TersoffParams tparam;
     lur::fillCarbonParametersTersoffOriginal(tparam);
@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
     locs.getOptions().mDec = 0.5;
     locs.getOptions().mHLB = 1e-6;
     locs.getOptions().mInc = 1.75;
-    //locs.getOptions().mOnlyCoordinateDescent = true;
+    //locs.getOptionkill 55s().mOnlyCoordinateDescent = true;
     locs.setObjective(&obj);
 
 

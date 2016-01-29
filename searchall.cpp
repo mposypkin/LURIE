@@ -65,15 +65,16 @@ int main(int argc, char** argv) {
     double ev;
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
 
-#if 0    
+#if 1    
     // Lennard Jones
-    lur::PairPotentialEnergy enrg(mm, ljpotent);
+    lur::PotentialCutter pc(3 * 3, 3 * 3 - 2.8 * 2.8, lur::ljpotent);
+    lur::PairPotentialEnergy enrg(mm, pc);
 #endif
 #if 0    
     // Morse
     lur::PairPotentialEnergy enrg(mm, morsepotent);
 #endif
-#if 1
+#if 0
     // Tersoff
     lur::TersoffParams tparam;
     lur::fillCarbonParametersTersoffOriginal(tparam);
@@ -100,7 +101,8 @@ int main(int argc, char** argv) {
     bp.mBox = box;
     bp.mObj = &obj;
     LipBounder<double> lb(bp.mObj);
-    lb.setLipConst(96);
+    const double lipconst = 128;
+    lb.setLipConst(lipconst);
     BoxconBNB<double> bnb;
     bnb.addBounder(&lb);
     bnb.init(bp);
@@ -118,6 +120,7 @@ int main(int argc, char** argv) {
             std::cout << "Search from " << u << "\n";
             std::cout << "In box " << BoxUtils::toString(sub.mBox) << "\n";
             std::cout << " with radius " << BoxUtils::radius(sub.mBox) << "\n";
+            std::cout << " with lb " << sub.mBound << "\n";
 
             double v;
             locs.search(y, &v);
@@ -128,10 +131,10 @@ int main(int argc, char** argv) {
                 os << tcur << " " << v << "\n";
                 FileUtils::updateFileWithContent(fname, os.str().c_str());
             };
-            
+
             std::cout << "Found v = " << v << "\n";
             logval(argv[3], v);
-            
+
             if (v < bestv) {
                 bestv = v;
                 std::cout << "Improved incumbent " << bestv << " from " << u << "\n";
@@ -139,6 +142,12 @@ int main(int argc, char** argv) {
                 VecUtils::vecPrint(N, y);
                 VecUtils::vecCopy(N, y, x);
                 logval(argv[2], v);
+                enrg.setFixedAtoms(true);
+                double v;
+                locs.search(y, &v);
+                enrg.setFixedAtoms(false);
+                std::cout << "Free configuration " << v << "\n";
+                VecUtils::vecPrint(N, y);
             }
         }
     };
@@ -159,7 +168,7 @@ int main(int argc, char** argv) {
     double v = mbhbc.search(x);
 #endif
 
-    //enrg.setFixedAtoms(true);
+    enrg.setFixedAtoms(true);
     double v;
     locs.search(x, &v);
 

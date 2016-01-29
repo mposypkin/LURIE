@@ -6,7 +6,7 @@
 CPP = c++
 
 # BNB solver root
-BNBROOT = ../BNB-Solver
+BNBROOT = ../BNB-solver
 
 # include folders
 INCLUDE = $(BNBROOT)
