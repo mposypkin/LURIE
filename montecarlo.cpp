@@ -132,26 +132,19 @@ int main(int argc, char** argv) {
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
     int ntries = atoi(argv[2]);
 
-#if 0    
-    // Lennard Jones
 
-    lur::PairPotentialEnergy enrg(mm, lur::ljpotent);
-#endif
-#if 0    
-    // Cutted Lennard Jones
-    lur::PairPotentialEnergy enrg(mm, ljcutpotent);
-#endif
 #if 0    
     // Morse
     lur::PairPotentialEnergy enrg(mm, lur::morsepotent);
 #endif
 
-#if 1
+#if 0
+    // Lennard Jones
     lur::PotentialCutter pc(3 * 3, 3 * 3 - 2.8 * 2.8, lur::ljpotent);
     lur::PairPotentialEnergy enrg(mm, pc);
 #endif
 
-#if 0
+#if 1
     // Tersoff
     lur::TersoffParams tparam;
     lur::fillCarbonParametersTersoffOriginal(tparam);

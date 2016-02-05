@@ -65,16 +65,18 @@ int main(int argc, char** argv) {
     double ev;
     lur::ParseJson::parseLatticeData(jsons, mm, ev, x);
 
-#if 1    
+#if 0    
     // Lennard Jones
     lur::PotentialCutter pc(3 * 3, 3 * 3 - 2.8 * 2.8, lur::ljpotent);
     lur::PairPotentialEnergy enrg(mm, pc);
 #endif
+    
 #if 0    
     // Morse
     lur::PairPotentialEnergy enrg(mm, morsepotent);
 #endif
-#if 0
+    
+#if 1
     // Tersoff
     lur::TersoffParams tparam;
     lur::fillCarbonParametersTersoffOriginal(tparam);
@@ -105,6 +107,7 @@ int main(int argc, char** argv) {
     lb.setLipConst(lipconst);
     BoxconBNB<double> bnb;
     bnb.addBounder(&lb);
+    bnb.getOptions().mEps = 0.1;
     bnb.init(bp);
 
     double bestv = 0;
@@ -117,10 +120,12 @@ int main(int argc, char** argv) {
         // if ((u < 0.9 * incum.mValue) && ((cnt++ % 100) == 0)) {
         //if ((cnt++ % 100) == 0) {
         if (true) {
+        //if (BoxUtils::radius(sub.mBox) < 2) {
             std::cout << "Search from " << u << "\n";
             std::cout << "In box " << BoxUtils::toString(sub.mBox) << "\n";
             std::cout << " with radius " << BoxUtils::radius(sub.mBox) << "\n";
             std::cout << " with lb " << sub.mBound << "\n";
+            VecUtils::vecPrint(N, y);
 
             double v;
             locs.search(y, &v);
@@ -134,6 +139,7 @@ int main(int argc, char** argv) {
 
             std::cout << "Found v = " << v << "\n";
             logval(argv[3], v);
+            VecUtils::vecPrint(N, y);
 
             if (v < bestv) {
                 bestv = v;
@@ -153,8 +159,9 @@ int main(int argc, char** argv) {
     };
 
     bnb.setHandler(hndl);
-    long long steps = 100000;
+    long long steps = 1000000;
     bnb.solve(steps);
+    std::cout << steps << " performed\n";
 #if 0
     std::cout << "The solution is " << bnb.getIncumbent().mValue << " found in " << steps << " steps \n";
     VecUtils::vecPrint(N, (double*) bnb.getIncumbent().mX);
